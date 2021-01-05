@@ -1,0 +1,1 @@
+worker: sh build/install/anonymous-chat-bot/bin/anonymous-chat-bot

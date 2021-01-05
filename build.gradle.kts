@@ -39,7 +39,7 @@ dependencies {
 
 
 application {
-    mainClass.set("anonymous.chat.bot.AnonymousChatBotCommand")
+    mainClass.set("me.ankhell.anonymous.chat.bot.AnonymousChatBotCommand")
 }
 
 java {
