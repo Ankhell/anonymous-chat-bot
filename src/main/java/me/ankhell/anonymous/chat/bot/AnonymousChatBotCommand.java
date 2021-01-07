@@ -27,12 +27,12 @@ public class AnonymousChatBotCommand implements Runnable {
     } else {
       environment = Environment.DEVELOPMENT;
     }
-    try (ApplicationContext applicationContext = ApplicationContext
+    ApplicationContext applicationContext = ApplicationContext
         .build(AnonymousChatBotCommand.class, environment)
         .environmentVariableIncludes("BOT_NAME", "BOT_TOKEN")
-        .start()) {
-      PicocliRunner.run(AnonymousChatBotCommand.class, applicationContext, args);
-    }
+        .start();
+    PicocliRunner.run(AnonymousChatBotCommand.class, applicationContext, args);
+
   }
 
 

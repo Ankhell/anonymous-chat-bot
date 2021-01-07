@@ -1,7 +1,6 @@
 plugins {
     id("com.github.johnrengelman.shadow") version "6.1.0"
     id("io.micronaut.application") version "1.2.0"
-    id("io.freefair.lombok") version "5.3.0"
 }
 
 version = "0.1"
@@ -21,7 +20,6 @@ micronaut {
 }
 
 dependencies {
-    annotationProcessor("info.picocli:picocli-codegen:4.2.0")
     implementation("io.micronaut:micronaut-validation")
     implementation("io.micronaut:micronaut-runtime")
     implementation("info.picocli:picocli")
@@ -35,6 +33,16 @@ dependencies {
     runtimeOnly("ch.qos.logback:logback-classic:1.2.3")
     implementation("org.slf4j:slf4j-api:1.7.30")
     implementation ("com.google.code.gson:gson:2.8.6")
+
+    implementation("io.micronaut.sql:micronaut-jdbc-hikari")
+    implementation("io.micronaut.sql:micronaut-hibernate-jpa")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa")
+    runtimeOnly("org.postgresql:postgresql:42.2.18")
+    compileOnly("org.projectlombok:lombok:1.18.16")
+
+    annotationProcessor ("org.projectlombok:lombok:1.18.16")
+    annotationProcessor("io.micronaut.data:micronaut-data-processor")
+    annotationProcessor("info.picocli:picocli-codegen:4.2.0")
 }
 
 

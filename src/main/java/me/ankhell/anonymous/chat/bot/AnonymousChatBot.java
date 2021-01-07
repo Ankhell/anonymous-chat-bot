@@ -1,27 +1,24 @@
 package me.ankhell.anonymous.chat.bot;
 
-import com.google.gson.Gson;
 import io.micronaut.context.annotation.Property;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.List;
 import javax.inject.Singleton;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.ankhell.anonymous.chat.bot.callback.CallbackData;
 import me.ankhell.anonymous.chat.bot.callback.interfaces.CallbackQueryHandler;
-import me.ankhell.anonymous.chat.bot.keyboards.KeyboardProvider;
+import me.ankhell.anonymous.chat.bot.commands.interfaces.CommandHandler;
 import me.ankhell.anonymous.chat.bot.reply.interfaces.MessageReplyHandler;
-import me.ankhell.anonymous.chat.bot.users.User;
-import me.ankhell.anonymous.chat.bot.users.UserVault;
+import me.ankhell.anonymous.chat.bot.utility.DataUtils;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.BotApiMethod;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 @Slf4j
 @Singleton
@@ -30,27 +27,21 @@ public class AnonymousChatBot extends TelegramLongPollingBot {
   private final String botName;
   private final String botToken;
   private final List<CallbackQueryHandler> callbackQueryHandlers;
-  private final UserVault userVault;
-  private final Gson gson;
-  private final KeyboardProvider keyboardProvider;
   private final List<MessageReplyHandler> messageReplyHandlers;
+  private final List<CommandHandler> commandHandlers;
 
   public AnonymousChatBot(
       DefaultBotOptions botOptions,
       @Property(name = "bot.name") String botName,
       @Property(name = "bot.token") String botToken,
       List<CallbackQueryHandler> callbackQueryHandlers,
-      UserVault userVault,
-      Gson gson,
-      KeyboardProvider keyboardProvider,
-      List<MessageReplyHandler> messageReplyHandlers) {
+      List<CommandHandler> commandHandlers,
+      List<MessageReplyHandler> messageReplyHandlers  ) {
     super(botOptions);
     this.botName = botName;
     this.botToken = botToken;
     this.callbackQueryHandlers = callbackQueryHandlers;
-    this.userVault = userVault;
-    this.gson = gson;
-    this.keyboardProvider = keyboardProvider;
+    this.commandHandlers = commandHandlers;
     this.messageReplyHandlers = messageReplyHandlers;
   }
 
@@ -68,31 +59,12 @@ public class AnonymousChatBot extends TelegramLongPollingBot {
   @Override
   public void onUpdateReceived(Update update) {
     Message message = update.getMessage();
-    if (message != null && message.getText().matches("(/start)|(/setup)")) {
-      userVault.addOrUpdateUser(new User(message.getFrom().getId()));
-      SendMessage sendMessage = new SendMessage();
-      sendMessage.setText("Hello, I'm anonymous chat bot, please set your sex");
-      sendMessage.setChatId(update.getMessage().getChatId().toString());
-      sendMessage.setReplyMarkup(keyboardProvider.getSexChooserKeyboard());
-      execute(sendMessage);
-    }
-    if (update.hasCallbackQuery()) {
-      CallbackQuery callbackQuery = update.getCallbackQuery();
-      CallbackData callbackData = gson.fromJson(callbackQuery.getData(), CallbackData.class);
-      callbackQueryHandlers.stream()
-          .filter(cq -> cq.wouldProcess(callbackData.getActionType()))
-          .map(cq -> cq.handleInlineQuery(callbackQuery))
-          .map(cq -> {
-            List<BotApiMethod<?>> methods = new ArrayList<>();
-            methods.add(cq.getFirst());
-            if (cq.getSecond().isPresent()) {
-              methods.add(cq.getSecond().get());
-            }
-            return methods;
-          })
-          .flatMap(List::stream)
-          .forEach(this::executeAndLogError);
-    }
+    handleCommands(message);
+    handleCallbacks(update);
+    handleReplys(message);
+  }
+
+  private void handleReplys(Message message) {
     if (message != null && message.isReply()) {
       messageReplyHandlers.stream()
           .filter(rh -> rh.wouldProcess(message))
@@ -102,11 +74,36 @@ public class AnonymousChatBot extends TelegramLongPollingBot {
     }
   }
 
+  private void handleCallbacks(Update update) {
+    if (update.hasCallbackQuery()) {
+      CallbackQuery callbackQuery = update.getCallbackQuery();
+      CallbackData callbackData = DataUtils.getCallbackData(callbackQuery);
+      callbackQueryHandlers.stream()
+          .filter(cq -> cq.wouldProcess(callbackData))
+          .map(cq -> cq.handleInlineQuery(callbackQuery))
+          .flatMap(List::stream)
+          .forEach(this::executeAndLogError);
+    }
+  }
+
+  private void handleCommands(Message message) {
+    if (message != null && message.getText().startsWith("/")) {
+      commandHandlers.stream()
+          .filter(cmdh -> cmdh.wouldProcess(message))
+          .map(cmdh -> cmdh.handleCommand(message))
+          .flatMap(List::stream)
+          .forEach(this::executeAndLogError);
+    }
+  }
+
   private <T extends Serializable, Method extends BotApiMethod<T>> void executeAndLogError(
       Method method) {
     try {
       execute(method);
-    } catch (TelegramApiException e) {
+    } catch (TelegramApiRequestException e) {
+      log.error(e.getApiResponse());
+      log.error("Something wrong happened during execution ", e);
+    } catch (TelegramApiException e){
       log.error("Something wrong happened during execution ", e);
     }
   }

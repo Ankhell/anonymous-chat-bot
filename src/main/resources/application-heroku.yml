@@ -1,0 +1,3 @@
+datasources:
+  default:
+    jdbc-url: ${JDBC_DATABASE_URL}

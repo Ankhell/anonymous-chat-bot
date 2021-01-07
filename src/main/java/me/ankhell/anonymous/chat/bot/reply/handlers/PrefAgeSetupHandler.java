@@ -15,12 +15,12 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 
 @Slf4j
 @Singleton
-public class AgeSetupHandler implements MessageReplyHandler {
+public class PrefAgeSetupHandler implements MessageReplyHandler {
 
   private final MessageProvider messageProvider;
   private final UserRepository userRepository;
 
-  public AgeSetupHandler(
+  public PrefAgeSetupHandler(
       MessageProvider messageProvider,
       UserRepository userRepository) {
     this.messageProvider = messageProvider;
@@ -29,29 +29,40 @@ public class AgeSetupHandler implements MessageReplyHandler {
 
   @Override
   public boolean wouldProcess(Message messageWithReply) {
-    return messageWithReply.getReplyToMessage().getText().equals("Пожалуйста, укажите Ваш возраст");
+    return messageWithReply.getReplyToMessage().getText()
+        .matches("Пожалуйста, укажите желаемый .* возраст собеседника");
   }
 
   @Override
   public List<BotApiMethod<?>> handleReply(Message messageWithReply) {
+    ActionType actionType =
+        messageWithReply.getReplyToMessage().getText().split(" ")[3].equals("минимальный")
+            ? ActionType.UDATE_PREF_MIN_AGE : ActionType.UDATE_PREF_MAX_AGE;
     List<BotApiMethod<?>> result = new ArrayList<>();
-    Optional<User> optUser = userRepository.findById(messageWithReply.getFrom().getId());
+    Integer userId = messageWithReply.getFrom().getId();
+    Optional<User> optUser = userRepository.findById(userId);
     String messageWithNumbers = messageWithReply.getText().replaceAll(".*?(\\d+).*?", "$1");
     if (messageWithNumbers.matches("\\d+")) {
+      Integer age = Integer.parseInt(messageWithNumbers);
       if (optUser.isPresent()) {
         User user = optUser.get();
-        user.setAge(Integer.parseInt(messageWithNumbers));
+        if (actionType == ActionType.UDATE_PREF_MIN_AGE) {
+          user.setPrefferedMinAge(age);
+          result.add(messageProvider.getAgeSetMessage(userId));
+          result.add(messageProvider.getAgeQueryMessage(userId, ActionType.UDATE_PREF_MAX_AGE));
+        } else {
+          user.setPrefferedMaxAge(age);
+          result.add(messageProvider.getAgeSetMessage(userId));
+          result.add(messageProvider.getPrefComTypeMessage(userId));
+        }
         userRepository.update(user);
-        result.add(messageProvider.getAgeSetMessage(messageWithReply.getFrom().getId()));
       } else {
         log.warn(String.format("User with id:%d was queried but was not found in vault",
-            messageWithReply.getFrom().getId()));
+            userId));
       }
     } else {
-      result.add(messageProvider.getWrongAgeMessage(messageWithReply.getFrom().getId(),
-          messageWithReply.getMessageId()));
-      result.add(messageProvider.getAgeQueryMessage(messageWithReply.getFrom().getId(),
-          ActionType.UPDATE_SEX_ME));
+      result.add(messageProvider.getWrongAgeMessage(userId, messageWithReply.getMessageId()));
+      result.add(messageProvider.getAgeQueryMessage(userId, actionType));
     }
     return result;
   }
